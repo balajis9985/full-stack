@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>💰 Smart Expense Tracker Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg-gradient: linear-gradient(135deg, #667eea, #764ba2);
+  --card-bg: rgba(255, 255, 255, 0.15);
+  --glass-border: rgba(255, 255, 255, 0.2);
+}
+
+* {
+  box-sizing: border-box;
+  transition: all 0.3s ease;
+}
+
+body {
+  font-family: 'Poppins', sans-serif;
+  background: var(--bg-gradient);
+  color: #fff;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 60px auto;
+  background: var(--card-bg);
+  padding: 40px;
+  border-radius: 24px;
+  box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--glass-border);
+  animation: fadeIn 1s ease-out;
+}
+
+@keyframes fadeIn {
+  from {opacity: 0; transform: translateY(20px);}
+  to {opacity: 1; transform: translateY(0);}
+}
+
+h1 {
+  text-align: center;
+  font-size: 2.4rem;
+  margin-bottom: 20px;
+  letter-spacing: 1px;
+}
+
+form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px;
+  margin-bottom: 25px;
+  justify-content: center;
+}
+
+input, select, button {
+  padding: 12px 15px;
+  border: none;
+  border-radius: 10px;
+  font-size: 1rem;
+  font-family: 'Poppins';
+}
+
+input, select {
+  flex: 1;
+  min-width: 180px;
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+  border: 1px solid var(--glass-border);
+}
+
+input::placeholder {
+  color: #ddd;
+}
+
+select option {
+  color: #333;
+}
+
+button {
+  background: #00c9a7;
+  color: #fff;
+  cursor: pointer;
+  padding: 12px 25px;
+  font-weight: 600;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 201, 167, 0.4);
+}
+
+button:hover {
+  background: #00a086;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 201, 167, 0.6);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: rgba(255,255,255,0.1);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+th, td {
+  padding: 12px;
+  text-align: left;
+}
+
+th {
+  background: rgba(255,255,255,0.15);
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+tr:nth-child(even) {
+  background: rgba(255,255,255,0.05);
+}
+
+tr:hover {
+  background: rgba(255,255,255,0.2);
+}
+
+canvas {
+  display: block;
+  margin: 40px auto;
+  max-width: 700px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 16px;
+  padding: 20px;
+}
+
+@media (max-width: 768px) {
+  .container { padding: 25px; }
+  form { flex-direction: column; }
+  input, select, button { width: 100%; }
+}
+</style>
+</head>
+
+<body>
+<div class="container">
+  <h1>💰 Smart Expense Tracker</h1>
+
+  <form id="expenseForm">
+    <input type="text" id="name" placeholder="Expense Name" required>
+    <select id="category" required>
+      <option value="">Category</option>
+      <option>Food</option>
+      <option>Transport</option>
+      <option>Entertainment</option>
+      <option>Shopping</option>
+      <option>Other</option>
+    </select>
+    <input type="number" id="amount" placeholder="Amount (₹)" required>
+    <button type="submit">+ Add Expense</button>
+  </form>
+
+  <table id="expenseTable">
+    <thead>
+      <tr><th>Name</th><th>Category</th><th>Amount</th><th>Date</th></tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <canvas id="expensePie"></canvas>
+  <canvas id="expenseBar"></canvas>
+</div>
+
+<script>
+const API_URL = "http://127.0.0.1:8000";
+
+document.getElementById("expenseForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const name = document.getElementById("name").value;
+  const category = document.getElementById("category").value;
+  const amount = parseFloat(document.getElementById("amount").value);
+
+  await fetch(`${API_URL}/add_expense`, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({name, category, amount})
+  });
+
+  document.getElementById("expenseForm").reset();
+  loadExpenses();
+});
+
+async function loadExpenses() {
+  const res = await fetch(`${API_URL}/expenses`);
+  const data = await res.json();
+  const tbody = document.querySelector("#expenseTable tbody");
+  tbody.innerHTML = "";
+  data.forEach(exp => {
+    tbody.innerHTML += `<tr>
+      <td>${exp.name}</td>
+      <td>${exp.category}</td>
+      <td>₹${exp.amount.toFixed(2)}</td>
+      <td>${exp.date}</td>
+    </tr>`;
+  });
+  loadCharts();
+}
+
+let pieChart, barChart;
+
+async function loadCharts() {
+  const res = await fetch(`${API_URL}/summary`);
+  const data = await res.json();
+  const labels = data.map(d => d.category);
+  const values = data.map(d => d.total);
+
+  if (pieChart) pieChart.destroy();
+  if (barChart) barChart.destroy();
+
+  const pieCtx = document.getElementById("expensePie").getContext("2d");
+  pieChart = new Chart(pieCtx, {
+    type: "doughnut",
+    data: {
+      labels,
+      datasets: [{
+        data: values,
+        backgroundColor: ["#ff9f40","#36a2eb","#ff6384","#4bc0c0","#9966ff"]
+      }]
+    },
+    options: {
+      plugins: {
+        legend: { position: "bottom", labels: { color: "#fff" } },
+        title: { display: true, text: "Spending Breakdown", color: "#fff" }
+      }
+    }
+  });
+
+  const barCtx = document.getElementById("expenseBar").getContext("2d");
+  barChart = new Chart(barCtx, {
+    type: "bar",
+    data: {
+      labels,
+      datasets: [{
+        label: "Total Amount (₹)",
+        data: values,
+        backgroundColor: "#00c9a7",
+        borderRadius: 12
+      }]
+    },
+    options: {
+      scales: {
+        x: { ticks: { color: "#fff" } },
+        y: { ticks: { color: "#fff" }, beginAtZero: true }
+      },
+      plugins: {
+        legend: { labels: { color: "#fff" } },
+        title: { display: true, text: "Category-wise Spending", color: "#fff" }
+      }
+    }
+  });
+}
+
+loadExpenses();
+</script>
+</body>
+</html>
