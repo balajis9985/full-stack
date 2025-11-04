@@ -4,7 +4,7 @@
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from pymongo import MongoClient
 from datetime import datetime
 
@@ -12,12 +12,11 @@ from datetime import datetime
 # 🌐 FastAPI App Setup
 # ===============================================================
 
-app = FastAPI(title="Expense Tracker API", version="1.0")
+app = FastAPI(title="Expense Tracker API", version="2.0")
 
-# Allow frontend apps (React, Vue, etc.) to access this API
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # ✅ Allows all domains (frontend access)
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -30,11 +29,7 @@ MONGO_URI = (
     "mongodb+srv://sau70134_db_user:vp7X2srVRqS12onl@dsamagmscaiml."
     "bttnnzu.mongodb.net/?retryWrites=true&w=majority&appName=DSAMAGMSCAIML"
 )
-
-# Connect to MongoDB Atlas Cluster
 client = MongoClient(MONGO_URI)
-
-# Database and Collection
 db = client["expense_tracker"]
 collection = db["expenses"]
 
@@ -46,7 +41,7 @@ class Expense(BaseModel):
     name: str
     category: str
     amount: float
-    date: str = datetime.now().strftime("%Y-%m-%d")
+    date: str = Field(default_factory=lambda: datetime.now().strftime("%Y-%m-%d"))
 
 # ===============================================================
 # 🧩 API Routes
@@ -54,28 +49,25 @@ class Expense(BaseModel):
 
 @app.get("/")
 def home():
-    """Root endpoint to check connection."""
-    return {"message": "💰 Expense Tracker API connected to MongoDB Atlas Cloud!"}
-
+    return {"message": "✅ Expense Tracker API connected successfully!"}
 
 @app.post("/add_expense")
 def add_expense(expense: Expense):
-    """Add a new expense record to MongoDB."""
+    """Add a new expense to MongoDB"""
+    print("📦 Incoming expense:", expense.dict())  # Debug log
     collection.insert_one(expense.dict())
-    return {"message": "✅ Expense added successfully to MongoDB Cloud!"}
-
+    return {"message": "Expense added successfully!", "data": expense.dict()}
 
 @app.get("/expenses")
 def get_expenses():
-    """Fetch all expenses sorted by date (latest first)."""
+    """Fetch all expenses sorted by date"""
     data = list(collection.find({}, {"_id": 0}))
     data.sort(key=lambda x: x["date"], reverse=True)
     return data
 
-
 @app.get("/summary")
 def get_summary():
-    """Get category-wise expense totals."""
+    """Return category-wise expense totals"""
     pipeline = [
         {"$group": {"_id": "$category", "total": {"$sum": "$amount"}}},
         {"$project": {"_id": 0, "category": "$_id", "total": 1}},
@@ -83,25 +75,19 @@ def get_summary():
     summary = list(collection.aggregate(pipeline))
     return summary
 
-
 @app.delete("/delete_expense/{name}")
 def delete_expense(name: str):
-    """Delete an expense by name."""
     result = collection.delete_one({"name": name})
-    if result.deleted_count > 0:
-        return {"message": f"🗑️ Expense '{name}' deleted successfully."}
-    return {"message": f"⚠️ Expense '{name}' not found."}
-
+    if result.deleted_count:
+        return {"message": f"Expense '{name}' deleted successfully."}
+    return {"message": f"Expense '{name}' not found."}
 
 @app.put("/update_expense/{name}")
 def update_expense(name: str, updated_expense: Expense):
-    """Update an expense record by name."""
-    result = collection.update_one(
-        {"name": name}, {"$set": updated_expense.dict()}
-    )
-    if result.matched_count > 0:
-        return {"message": f"✏️ Expense '{name}' updated successfully."}
-    return {"message": f"⚠️ Expense '{name}' not found."}
+    result = collection.update_one({"name": name}, {"$set": updated_expense.dict()})
+    if result.matched_count:
+        return {"message": f"Expense '{name}' updated successfully."}
+    return {"message": f"Expense '{name}' not found."}
 
 # ===============================================================
 # ✅ End of File
