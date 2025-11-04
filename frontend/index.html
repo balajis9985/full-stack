@@ -173,19 +173,29 @@ canvas {
 </div>
 
 <script>
-const API_URL = "https://bak-s4ma.onrender.com"; // ✅ Updated backend URL
+const API_URL = "https://bak-s4ma.onrender.com"; // ✅ your backend base URL
 
 document.getElementById("expenseForm").addEventListener("submit", async (e) => {
   e.preventDefault();
-  const name = document.getElementById("name").value;
-  const category = document.getElementById("category").value;
+  const name = document.getElementById("name").value.trim();
+  const category = document.getElementById("category").value.trim();
   const amount = parseFloat(document.getElementById("amount").value);
 
-  await fetch(`${API_URL}/add_expense`, {
+  if (!name || !category || !amount) {
+    alert("Please fill all fields correctly!");
+    return;
+  }
+
+  console.log("📤 Sending:", { name, category, amount });
+
+  const res = await fetch(`${API_URL}/add_expense`, {
     method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({name, category, amount})
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, category, amount })
   });
+
+  const data = await res.json();
+  console.log("📥 Response:", data);
 
   document.getElementById("expenseForm").reset();
   loadExpenses();
